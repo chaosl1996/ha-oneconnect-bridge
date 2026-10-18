@@ -25,7 +25,30 @@ MANAGED_BY_FIELD = "managed_by"
 MANAGED_BY = "entity_bridge"
 
 _MOMENTARY_DOMAINS = frozenset({"script", "scene", "button", "input_button"})
-_STATE_DOMAINS = frozenset({"switch", "input_boolean"})
+# 标准 turn_on/turn_off 域：直接用真实开关状态绑定
+_STATE_DOMAINS = frozenset(
+    {
+        "switch",
+        "input_boolean",
+        "automation",
+        "cover",
+        "fan",
+        "humidifier",
+        "siren",
+        "valve",
+        "water_heater",
+    }
+)
+# media_player 状态多值：播放中=开，其余=关
+_MEDIA_STATE_MAP = {
+    "playing": 1,
+    "buffering": 1,
+    "on": 1,
+    "paused": 0,
+    "idle": 0,
+    "standby": 0,
+    "off": 0,
+}
 
 # 产品 ref → 服务模板档位。档位决定 services 与 bindings 的结构。
 # switchN = N 键开关（声明全部键位服务，仅绑定第一键）；其余为灯类档位。
@@ -155,6 +178,8 @@ def build_child_mapping(
         child = _build_lock_child(entity_id, display_name)
     elif domain in _STATE_DOMAINS:
         child = _build_state_switch_child(entity_id, display_name)
+    elif domain == "media_player":
+        child = _build_media_player_child(entity_id, display_name)
     else:  # script / scene / button / input_button: 常关显示 + 命令触发
         child = _build_momentary_child(entity_id, display_name)
     child[MANAGED_BY_FIELD] = MANAGED_BY
@@ -333,6 +358,28 @@ def _build_momentary_child(entity_id: str, name: str) -> dict[str, Any]:
                     "entity_id": entity_id,
                     "source": "constant",
                     "value": 0,
+                }
+            },
+        }
+    ]
+    return child
+
+
+def _build_media_player_child(entity_id: str, name: str) -> dict[str, Any]:
+    """播放器包装：播放中显示开，暂停/空闲/关机显示关。"""
+
+    child = _build_product_child(entity_id, name, "ZG2R")
+    child["bindings"] = [
+        {
+            "sid": "switch1",
+            "fields": {
+                "on": {
+                    "entity_id": entity_id,
+                    "source": "state",
+                    "ha_to_huawei": {
+                        "type": "state_map",
+                        "map": dict(_MEDIA_STATE_MAP),
+                    },
                 }
             },
         }

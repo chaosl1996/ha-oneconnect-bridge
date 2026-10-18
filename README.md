@@ -95,14 +95,16 @@ config/custom_components/oneconnect_bridge/
 
 两步操作：
 
-1. **勾选实体**：支持 `switch` / `light` / `input_boolean` / `input_button` / `script` / `scene` / `lock` / `button`；实体名称自动作为云端设备显示名称；
+1. **勾选实体**：支持 `switch` / `light` / `input_boolean` / `input_button` / `script` / `scene` / `lock` / `button` / `automation` / `cover` / `fan` / `humidifier` / `media_player` / `siren` / `valve` / `water_heater`；实体名称自动作为云端设备显示名称；
 2. **选择产品样式**：为每个新实体选择华为产品型号（默认「自动」按实体能力选型），型号决定设备在智慧生活中的外观与功能。
 
 - 灯光自动选型：全彩 → RGBCW 驱动（ZG0O），色温 → 调光调色灯（ZG13），亮度 → 调光灯（ZG14），仅开关 → 智能照明（ZG0S）；也可手动指定任意灯类型号（吸顶灯、灯带、射灯等）；
 - 开关类实体可选 1/2/3 键产品（ZG2R/ZG2S/ZG2T）；
-- `lock` 以智能开关形式包装（开=已上锁，关=已解锁），`script` / `scene` / `button` / `input_button` 以开关形式包装（显示常关，点击触发一次执行/按压）；
+- `lock` 以智能开关形式包装（开=已上锁，关=已解锁），`script` / `scene` / `button` / `input_button` 以开关形式包装（显示常关，点击触发一次执行/按压），`automation` 以开关包装（开=启用自动化），`media_player` 以开关包装（播放中=开，暂停/空闲=关），`cover` / `fan` / `humidifier` / `siren` / `valve` / `water_heater` 以真实开关状态包装；
 - 保存后自动写入对应网关 `mapping.yaml` 并触发子设备重载，取消勾选即删除子设备；
 - 自动生成的条目带 `managed_by: entity_bridge` 标记，与手写 children 共存，互不覆盖。
+
+> 只读实体（`sensor` / `binary_sensor`）暂不支持：需要在产品目录中加入上报型传感器品类（温湿度、人体存在等），属于后续真品类实验的范围。
 
 ### 6. 重新配对与删除
 

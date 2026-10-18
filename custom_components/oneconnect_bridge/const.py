@@ -23,6 +23,7 @@ DISCOVERY_MULTICAST = "238.238.238.238"
 PIN_TTL_SECONDS = 300
 
 # HA entity domains selectable in the "add entities" options flow.
+# 全部支持开关包装（turn_on/turn_off）；传感器类只读域见 README 路线图。
 BRIDGEABLE_DOMAINS = (
     "switch",
     "light",
@@ -32,6 +33,14 @@ BRIDGEABLE_DOMAINS = (
     "scene",
     "lock",
     "button",
+    "automation",
+    "cover",
+    "fan",
+    "humidifier",
+    "media_player",
+    "siren",
+    "valve",
+    "water_heater",
 )
 
 # Keep local/cloud abuse-prevention limits fixed.

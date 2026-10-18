@@ -188,6 +188,36 @@ def test_product_options_filter_by_domain():
     assert light_opts["ZG0O"].startswith("华为全屋智能") and "ZG0O" in light_opts["ZG0O"]
 
 
+def test_state_wrapper_domains():
+    """新增可控域均以真实开关状态绑定包装。"""
+    for entity_id in (
+        "automation.morning_lights",
+        "cover.living_room_blind",
+        "fan.bedroom_fan",
+        "humidifier.living_room",
+        "siren.alarm",
+        "valve.gas_valve",
+        "water_heater.bathroom",
+    ):
+        child = build_child_mapping(entity_id, name="包装")
+        plan = _compile({child_key_for_entity(entity_id): child})
+        on_binding = next(b for b in plan.children[0].bindings if b.field_name == "on")
+        assert on_binding.source == "state"
+        assert on_binding.ha_to_huawei["map"] == {"on": 1, "off": 0}
+
+
+def test_media_player_state_map():
+    child = build_child_mapping("media_player.tv", name="电视")
+    plan = _compile({"media_player_tv": child})
+    on_binding = next(b for b in plan.children[0].bindings if b.field_name == "on")
+    assert on_binding.source == "state"
+    state_map = on_binding.ha_to_huawei["map"]
+    assert state_map["playing"] == 1
+    assert state_map["paused"] == 0
+    assert state_map["idle"] == 0
+    assert state_map["off"] == 0
+
+
 def test_unsupported_domain_rejected():
     with pytest.raises(ValueError):
         build_child_mapping("climate.ac", name="空调")

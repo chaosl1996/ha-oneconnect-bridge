@@ -93,11 +93,15 @@ config/custom_components/oneconnect_bridge/
 设置 → 设备与服务 → OneConnect Bridge → 配置 → 添加实体
 ```
 
-- 勾选 `switch` / `light` / `input_boolean` / `script` / `scene` / `lock` / `button` 实体后保存，集成自动生成对应网关 `mapping.yaml` 的 children 条目并触发子设备重载；
-- 取消勾选即从智慧生活删除对应子设备；
-- 实体名称自动作为云端设备显示名称；
-- 灯光按能力自动选择产品型号：全彩 → RGBCW 驱动（ZG0O），色温 → 调光调色灯（ZG13），亮度 → 调光灯（ZG14），仅开关 → 智能照明（ZG0S）；
-- `lock` 以智能开关形式包装（开=已上锁，关=已解锁），`script` / `scene` / `button` 以开关形式包装（显示常关，点击触发一次执行/按压）；
+两步操作：
+
+1. **勾选实体**：支持 `switch` / `light` / `input_boolean` / `input_button` / `script` / `scene` / `lock` / `button`；实体名称自动作为云端设备显示名称；
+2. **选择产品样式**：为每个新实体选择华为产品型号（默认「自动」按实体能力选型），型号决定设备在智慧生活中的外观与功能。
+
+- 灯光自动选型：全彩 → RGBCW 驱动（ZG0O），色温 → 调光调色灯（ZG13），亮度 → 调光灯（ZG14），仅开关 → 智能照明（ZG0S）；也可手动指定任意灯类型号（吸顶灯、灯带、射灯等）；
+- 开关类实体可选 1/2/3 键产品（ZG2R/ZG2S/ZG2T）；
+- `lock` 以智能开关形式包装（开=已上锁，关=已解锁），`script` / `scene` / `button` / `input_button` 以开关形式包装（显示常关，点击触发一次执行/按压）；
+- 保存后自动写入对应网关 `mapping.yaml` 并触发子设备重载，取消勾选即删除子设备；
 - 自动生成的条目带 `managed_by: entity_bridge` 标记，与手写 children 共存，互不覆盖。
 
 ### 6. 重新配对与删除

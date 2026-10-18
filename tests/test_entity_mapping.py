@@ -124,7 +124,8 @@ def test_lock_child_maps_locked_state():
 
 
 def test_momentary_children_use_constant_off():
-    for entity_id in ("script.leave_home", "scene.movie_night", "button.restart"):
+    for entity_id in ("script.leave_home", "scene.movie_night", "button.restart",
+                      "input_button.doorbell"):
         domain = entity_id.split(".")[0]
         child = build_child_mapping(entity_id, name="瞬时")
         plan = _compile({f"ha_{domain}": child})
@@ -132,6 +133,59 @@ def test_momentary_children_use_constant_off():
         assert on_binding.source == "constant"
         assert on_binding.value == 0
         assert on_binding.entity_id == entity_id
+
+
+def test_explicit_product_ref_overrides_auto():
+    from custom_components.oneconnect_bridge.business.entity_mapping import (
+        _PRODUCT_TEMPLATES,
+    )
+
+    # 3 键开关：声明全部键位服务，仅绑定第一键
+    child = build_child_mapping(
+        "switch.pdu", name="PDU", product_ref="ZG2T"
+    )
+    plan = _compile({"switch_pdu": child})
+    entry = plan.children[0]
+    assert entry.product.prod_id == "ZG2T"
+    assert {s.service_id for s in entry.services} == {"switch1", "switch2", "switch3"}
+    assert {b.service_id for b in entry.bindings} == {"switch1"}
+
+    # 指定单色吸顶灯：走 single 模板（仅开关）
+    child = build_child_mapping("light.x", name="灯", product_ref="ZG0Y")
+    plan = _compile({"light_x": child})
+    assert plan.children[0].product.prod_id == "ZG0Y"
+    assert {s.service_id for s in plan.children[0].services} == {"switch"}
+
+    # 指定调光调色灯带：走 cct 模板
+    child = build_child_mapping("light.y", name="灯带", product_ref="ZG17")
+    plan = _compile({"light_y": child})
+    assert {s.service_id for s in plan.children[0].services} == {
+        "switch", "brightness", "cct",
+    }
+
+    # catalog 中存在但无模板档位的产品 / 未知产品 → 拒绝
+    assert "ZG37" not in _PRODUCT_TEMPLATES
+    with pytest.raises(ValueError):
+        build_child_mapping("switch.x", name="X", product_ref="ZG37")
+    with pytest.raises(ValueError):
+        build_child_mapping("switch.x", name="X", product_ref="NOPE")
+
+
+def test_product_options_filter_by_domain():
+    from custom_components.oneconnect_bridge.business.catalog import load_catalog
+    from custom_components.oneconnect_bridge.business.entity_mapping import (
+        product_options,
+    )
+
+    catalog = load_catalog()
+    light_opts = product_options(catalog, "light")
+    switch_opts = product_options(catalog, "switch")
+    assert "ZG0O" in light_opts and "ZG13" in light_opts
+    assert "ZG2R" not in light_opts
+    assert "ZG2R" in switch_opts and "ZG2T" in switch_opts
+    assert "ZG0O" not in switch_opts
+    # label 带产品名与 ref，便于用户辨认
+    assert light_opts["ZG0O"].startswith("华为全屋智能") and "ZG0O" in light_opts["ZG0O"]
 
 
 def test_unsupported_domain_rejected():

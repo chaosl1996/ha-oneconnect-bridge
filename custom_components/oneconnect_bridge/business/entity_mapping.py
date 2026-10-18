@@ -2,13 +2,15 @@
 
 将用户在配置界面勾选的 HA 实体转换为 mapping.yaml 的 children 条目：
 
-- switch / input_boolean → 单键开关 ZG2R（真实状态绑定）
-- light → 按能力选择 ZG0S（单色）/ ZG14（亮度）/ ZG13（色温）/ ZG0O（全彩）
-- lock → ZG2R 开关包装（锁定=开，解锁=关）
-- script / scene / button → ZG2R 开关包装（常量 0 显示 + 命令触发）
+- switch / input_boolean → 开关产品（真实状态绑定，默认 ZG2R）
+- light → 按能力自动选型，或用户指定产品：单色 / 调光 / 调色温 / 全彩
+- lock → 开关包装（锁定=开，解锁=关）
+- script / scene / button / input_button → 开关包装（常量 0 显示 + 命令触发）
 
-生成的条目带 ``managed_by: entity_bridge`` 标记：合并时只增删这些条目，
-用户手写的 children 永远不会被覆盖或删除。
+用户可在配置界面为每个实体指定华为产品型号（catalog.yaml 中存在的
+产品 ref）；未指定时按实体域与能力自动选择。生成的条目带
+``managed_by: entity_bridge`` 标记：合并时只增删这些条目，用户手写的
+children 永远不会被覆盖或删除。
 
 本模块不依赖 Home Assistant，可独立单测。
 """
@@ -22,7 +24,39 @@ from ..const import BRIDGEABLE_DOMAINS, MAX_CHILD_DEVICES_PER_GATEWAY
 MANAGED_BY_FIELD = "managed_by"
 MANAGED_BY = "entity_bridge"
 
-_SWITCH_SERVICES = [{"st": "switch", "sid": "switch1"}]
+_MOMENTARY_DOMAINS = frozenset({"script", "scene", "button", "input_button"})
+_STATE_DOMAINS = frozenset({"switch", "input_boolean"})
+
+# 产品 ref → 服务模板档位。档位决定 services 与 bindings 的结构。
+# switchN = N 键开关（声明全部键位服务，仅绑定第一键）；其余为灯类档位。
+_PRODUCT_TEMPLATES = {
+    "ZG2R": "switch1",
+    "ZG2S": "switch2",
+    "ZG2T": "switch3",
+    "ZG0S": "single",
+    "ZG0R": "single",
+    "ZG0T": "single",
+    "ZG0U": "single",
+    "ZG0V": "single",
+    "ZG0W": "single",
+    "ZG0X": "single",
+    "ZG0Y": "single",
+    "ZG14": "dim",
+    "ZG13": "cct",
+    "ZG17": "cct",
+    "ZG2F": "cct",
+    "ZG2G": "cct",
+    "ZG2H": "cct",
+    "ZG2I": "cct",
+    "ZG2J": "cct",
+    "ZG0O": "fullcolor",
+}
+
+# 配置界面下拉可选项：按实体域过滤的 device_type 集合。
+_LIGHT_DEVICE_TYPES = frozenset(
+    {"A0E", "A1A", "A1B", "A1C", "A1D", "A1E", "A1F", "A20", "A21"}
+)
+_SWITCH_DEVICE_TYPES = frozenset({"A13"})
 
 
 def child_key_for_entity(entity_id: str) -> str:
@@ -75,25 +109,53 @@ def managed_children(raw: Any) -> dict[str, dict[str, Any]]:
     }
 
 
+def product_options(
+    catalog: Mapping[str, Any], domain: str
+) -> dict[str, str]:
+    """Build {prod_id: label} choices for one entity domain's dropdown.
+
+    catalog 为 load_catalog() 的结果；灯实体可选全部灯类产品，
+    其余实体可选开关类产品。
+    """
+
+    wanted = _LIGHT_DEVICE_TYPES if domain == "light" else _SWITCH_DEVICE_TYPES
+    options: dict[str, str] = {}
+    for prod_id in sorted(catalog):
+        spec = catalog[prod_id]
+        if spec.device_type not in wanted:
+            continue
+        options[prod_id] = f"{spec.device_name} ({prod_id})"
+    return options
+
+
 def build_child_mapping(
     entity_id: str,
     *,
     name: str | None = None,
     attributes: Mapping[str, Any] | None = None,
+    product_ref: str | None = None,
 ) -> dict[str, Any]:
-    """Build one raw mapping child entry for a selected HA entity."""
+    """Build one raw mapping child entry for a selected HA entity.
+
+    product_ref 指定时使用该产品的服务模板；未指定时灯按能力自动选型，
+    其余实体使用默认开关产品。
+    """
 
     domain = entity_id.split(".", 1)[0]
     if domain not in BRIDGEABLE_DOMAINS:
         raise ValueError(f"unsupported domain for entity bridge: {domain}")
     display_name = name or entity_id
-    if domain == "light":
-        child = _build_light_child(entity_id, display_name, dict(attributes or {}))
+    if product_ref is not None:
+        child = _build_product_child(entity_id, display_name, product_ref)
+    elif domain == "light":
+        child = _build_product_child(
+            entity_id, display_name, _light_product_id(dict(attributes or {}))
+        )
     elif domain == "lock":
         child = _build_lock_child(entity_id, display_name)
-    elif domain in {"switch", "input_boolean"}:
+    elif domain in _STATE_DOMAINS:
         child = _build_state_switch_child(entity_id, display_name)
-    else:  # script / scene / button: momentary wrapper with constant-off display
+    else:  # script / scene / button / input_button: 常关显示 + 命令触发
         child = _build_momentary_child(entity_id, display_name)
     child[MANAGED_BY_FIELD] = MANAGED_BY
     return child
@@ -143,89 +205,166 @@ def apply_entity_selection(
     return result
 
 
-def _build_state_switch_child(entity_id: str, name: str) -> dict[str, Any]:
+# ---------------------------------------------------------------------------
+# 绑定模板辅助
+# ---------------------------------------------------------------------------
+
+def _on_state_binding(entity_id: str, sid: str) -> dict[str, Any]:
     return {
-        "display": {"friendly_name": name},
-        "product": {
-            "ref": "ZG2R",
-            "services": [dict(service) for service in _SWITCH_SERVICES],
-        },
-        "bindings": [
-            {
-                "sid": "switch1",
-                "fields": {
-                    "on": {
-                        "entity_id": entity_id,
-                        "source": "state",
-                        "ha_to_huawei": {
-                            "type": "state_map",
-                            "map": {"on": 1, "off": 0},
-                        },
-                        "huawei_to_ha": {
-                            "type": "state_map",
-                            "map": {"0": "off", "1": "on"},
-                        },
-                    }
+        "sid": sid,
+        "fields": {
+            "on": {
+                "entity_id": entity_id,
+                "source": "state",
+                "ha_to_huawei": {
+                    "type": "state_map",
+                    "map": {"on": 1, "off": 0},
+                },
+                "huawei_to_ha": {
+                    "type": "state_map",
+                    "map": {"0": "off", "1": "on"},
                 },
             }
-        ],
+        },
     }
+
+
+def _attribute_binding(
+    entity_id: str, sid: str, field_name: str, attribute: str
+) -> dict[str, Any]:
+    return {
+        "sid": sid,
+        "fields": {
+            field_name: {
+                "entity_id": entity_id,
+                "source": "attribute",
+                "attribute": attribute,
+            }
+        },
+    }
+
+
+def _colour_binding(entity_id: str) -> dict[str, Any]:
+    return {
+        "sid": "colour",
+        "fields": {
+            component: {
+                "entity_id": entity_id,
+                "source": "attribute",
+                "attribute": "rgb_color",
+                "component": component,
+            }
+            for component in ("red", "green", "blue")
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# 子设备构建
+# ---------------------------------------------------------------------------
+
+def _build_product_child(
+    entity_id: str, name: str, product_ref: str
+) -> dict[str, Any]:
+    """按产品模板档位构建 child（灯类与多键开关共用）。"""
+
+    template = _PRODUCT_TEMPLATES.get(product_ref)
+    if template is None:
+        raise ValueError(
+            f"product {product_ref!r} is not supported for entity bridging"
+        )
+    child: dict[str, Any] = {
+        "display": {"friendly_name": name},
+        "product": {"ref": product_ref, "services": []},
+        "bindings": [],
+    }
+    services = child["product"]["services"]
+    bindings = child["bindings"]
+
+    if template.startswith("switch"):
+        key_count = int(template.removeprefix("switch") or "1")
+        for index in range(1, key_count + 1):
+            services.append({"st": "switch", "sid": f"switch{index}"})
+        bindings.append(_on_state_binding(entity_id, "switch1"))
+        return child
+
+    services.append({"st": "switch", "sid": "switch"})
+    bindings.append(_on_state_binding(entity_id, "switch"))
+    if template in {"dim", "cct", "fullcolor"}:
+        services.append({"st": "brightness", "sid": "brightness"})
+        bindings.append(
+            _attribute_binding(entity_id, "brightness", "brightness", "brightness")
+        )
+    if template in {"cct", "fullcolor"}:
+        services.append({"st": "cct", "sid": "cct"})
+        bindings.append(
+            _attribute_binding(
+                entity_id, "cct", "colorTemperature", "color_temp_kelvin"
+            )
+        )
+    if template == "fullcolor":
+        services.insert(0, {"st": "subProduct", "sid": "subProduct"})
+        services.append({"st": "colour", "sid": "colour"})
+        bindings.insert(
+            0,
+            {
+                "sid": "subProduct",
+                "fields": {"subProductId": {"source": "constant", "value": "05"}},
+            },
+        )
+        bindings.append(_colour_binding(entity_id))
+    return child
+
+
+def _build_state_switch_child(entity_id: str, name: str) -> dict[str, Any]:
+    child = _build_product_child(entity_id, name, "ZG2R")
+    return child
 
 
 def _build_momentary_child(entity_id: str, name: str) -> dict[str, Any]:
-    """Script/scene/button wrapper: always shown off, command triggers once."""
+    """瞬时实体包装：显示常关，命令触发一次执行/按压。"""
 
-    return {
-        "display": {"friendly_name": name},
-        "product": {
-            "ref": "ZG2R",
-            "services": [dict(service) for service in _SWITCH_SERVICES],
-        },
-        "bindings": [
-            {
-                "sid": "switch1",
-                "fields": {
-                    "on": {
-                        "entity_id": entity_id,
-                        "source": "constant",
-                        "value": 0,
-                    }
-                },
-            }
-        ],
-    }
+    child = _build_product_child(entity_id, name, "ZG2R")
+    child["bindings"] = [
+        {
+            "sid": "switch1",
+            "fields": {
+                "on": {
+                    "entity_id": entity_id,
+                    "source": "constant",
+                    "value": 0,
+                }
+            },
+        }
+    ]
+    return child
 
 
 def _build_lock_child(entity_id: str, name: str) -> dict[str, Any]:
-    return {
-        "display": {"friendly_name": name},
-        "product": {
-            "ref": "ZG2R",
-            "services": [dict(service) for service in _SWITCH_SERVICES],
-        },
-        "bindings": [
-            {
-                "sid": "switch1",
-                "fields": {
-                    "on": {
-                        "entity_id": entity_id,
-                        "source": "state",
-                        "ha_to_huawei": {
-                            "type": "state_map",
-                            "map": {
-                                "locked": 1,
-                                "locking": 1,
-                                "unlocked": 0,
-                                "unlocking": 0,
-                                "jammed": 0,
-                                "open": 0,
-                            },
+    child = _build_product_child(entity_id, name, "ZG2R")
+    child["bindings"] = [
+        {
+            "sid": "switch1",
+            "fields": {
+                "on": {
+                    "entity_id": entity_id,
+                    "source": "state",
+                    "ha_to_huawei": {
+                        "type": "state_map",
+                        "map": {
+                            "locked": 1,
+                            "locking": 1,
+                            "unlocked": 0,
+                            "unlocking": 0,
+                            "jammed": 0,
+                            "open": 0,
                         },
-                    }
-                },
-            }
-        ],
-    }
+                    },
+                }
+            },
+        }
+    ]
+    return child
 
 
 _LIGHT_FULL_COLOR_MODES = {"rgb", "rgbw", "rgbww", "hs", "xy"}
@@ -241,92 +380,3 @@ def _light_product_id(attributes: Mapping[str, Any]) -> str:
     if mode_set & {"brightness", "white"} or "brightness" in attributes:
         return "ZG14"
     return "ZG0S"
-
-
-def _build_light_child(
-    entity_id: str, name: str, attributes: Mapping[str, Any]
-) -> dict[str, Any]:
-    product_id = _light_product_id(attributes)
-    child: dict[str, Any] = {
-        "display": {"friendly_name": name},
-        "product": {
-            "ref": product_id,
-            "services": [
-                {"st": "switch", "sid": "switch"},
-            ],
-        },
-        "bindings": [
-            {
-                "sid": "switch",
-                "fields": {
-                    "on": {
-                        "entity_id": entity_id,
-                        "source": "state",
-                        "ha_to_huawei": {
-                            "type": "state_map",
-                            "map": {"on": 1, "off": 0},
-                        },
-                        "huawei_to_ha": {
-                            "type": "state_map",
-                            "map": {"0": "off", "1": "on"},
-                        },
-                    }
-                },
-            }
-        ],
-    }
-    if product_id in {"ZG14", "ZG13", "ZG0O"}:
-        child["product"]["services"].append({"st": "brightness", "sid": "brightness"})
-        child["bindings"].append(
-            {
-                "sid": "brightness",
-                "fields": {
-                    "brightness": {
-                        "entity_id": entity_id,
-                        "source": "attribute",
-                        "attribute": "brightness",
-                    }
-                },
-            }
-        )
-    if product_id in {"ZG13", "ZG0O"}:
-        child["product"]["services"].append({"st": "cct", "sid": "cct"})
-        child["bindings"].append(
-            {
-                "sid": "cct",
-                "fields": {
-                    "colorTemperature": {
-                        "entity_id": entity_id,
-                        "source": "attribute",
-                        "attribute": "color_temp_kelvin",
-                    }
-                },
-            }
-        )
-    if product_id == "ZG0O":
-        child["product"]["services"].insert(
-            0, {"st": "subProduct", "sid": "subProduct"}
-        )
-        child["product"]["services"].append({"st": "colour", "sid": "colour"})
-        child["bindings"].insert(
-            0,
-            {
-                "sid": "subProduct",
-                "fields": {"subProductId": {"source": "constant", "value": "05"}},
-            },
-        )
-        child["bindings"].append(
-            {
-                "sid": "colour",
-                "fields": {
-                    component: {
-                        "entity_id": entity_id,
-                        "source": "attribute",
-                        "attribute": "rgb_color",
-                        "component": component,
-                    }
-                    for component in ("red", "green", "blue")
-                },
-            }
-        )
-    return child

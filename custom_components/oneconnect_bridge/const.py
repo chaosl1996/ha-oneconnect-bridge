@@ -27,6 +27,7 @@ BRIDGEABLE_DOMAINS = (
     "switch",
     "light",
     "input_boolean",
+    "input_button",
     "script",
     "scene",
     "lock",

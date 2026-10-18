@@ -196,13 +196,13 @@ async def _call_binding(
                 "lock", service, {"entity_id": binding.entity_id}, blocking=True
             )
             return
-        if domain == "button":
+        if domain in {"button", "input_button"}:
             if is_on:
                 _LOGGER.debug(
-                    "Calling button.press entity=%s", binding.entity_id
+                    "Calling %s.press entity=%s", domain, binding.entity_id
                 )
                 await hass.services.async_call(
-                    "button", "press", {"entity_id": binding.entity_id}, blocking=True
+                    domain, "press", {"entity_id": binding.entity_id}, blocking=True
                 )
             return
         service = "turn_on" if is_on else "turn_off"

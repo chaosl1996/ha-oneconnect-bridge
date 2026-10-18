@@ -40,9 +40,16 @@
       },
       "add_entities": {
         "title": "添加实体",
-        "description": "勾选要接入华为智慧生活的实体（共 {entity_count} 个可选）。保存后自动写入该网关的 mapping.yaml 并触发子设备重载，实体名称即为设备名称。",
+        "description": "第一步：勾选要接入华为智慧生活的实体（共 {entity_count} 个可选）。保存后自动写入该网关的 mapping.yaml 并触发子设备重载，实体名称即为设备名称。",
         "data": {
           "entities": "实体"
+        }
+      },
+      "choose_products": {
+        "title": "选择产品样式",
+        "description": "第二步：为本次新增的 {entity_count} 个实体选择华为产品样式。默认「自动」按实体能力选型；也可手动指定型号，型号决定设备在智慧生活中的外观与功能。",
+        "data": {
+          "auto": "自动（按实体能力推荐）"
         }
       }
     },

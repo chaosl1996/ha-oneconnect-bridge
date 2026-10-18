@@ -23,6 +23,41 @@
       "mac_not_found": "Unable to read the MAC address of the selected network interface."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gateway settings",
+        "description": "Choose what to configure.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "interface": {
+        "title": "Select pairing network interface",
+        "data": {
+          "interface_ip": "Pairing network IPv4 address"
+        }
+      },
+      "add_entities": {
+        "title": "Add entities",
+        "description": "Step 1: pick the entities to expose to Huawei Smart Life ({entity_count} available). Saving writes the gateway's mapping.yaml and reloads child devices automatically.",
+        "data": {
+          "entities": "Entities"
+        }
+      },
+      "choose_products": {
+        "title": "Choose product styles",
+        "description": "Step 2: pick a Huawei product style for each of the {entity_count} newly selected entities. \"Auto\" selects by entity capabilities; a specific model controls how the device looks and behaves in Smart Life.",
+        "data": {
+          "auto": "Auto (recommended by capabilities)"
+        }
+      }
+    },
+    "error": {
+      "mapping_write_failed": "Failed to write mapping.yaml: {error}",
+      "reload_failed": "The mapping was written, but the child-device reload failed (you can press \"Reload child-device configuration\" later when the gateway reconnects): {error}"
+    }
+  },
   "device": {
     "gateway": {
       "name": "Smart Home gateway"

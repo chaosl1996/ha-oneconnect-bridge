@@ -23,6 +23,34 @@
       "mac_not_found": "无法读取所选网卡的 MAC 地址。"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "网关设置",
+        "description": "选择要执行的操作。",
+        "data": {
+          "action": "操作"
+        }
+      },
+      "interface": {
+        "title": "选择配对网卡",
+        "data": {
+          "interface_ip": "配对网卡 IPv4 地址"
+        }
+      },
+      "add_entities": {
+        "title": "添加实体",
+        "description": "勾选要接入华为智慧生活的实体（共 {entity_count} 个可选）。保存后自动写入该网关的 mapping.yaml 并触发子设备重载，实体名称即为设备名称。",
+        "data": {
+          "entities": "实体"
+        }
+      }
+    },
+    "error": {
+      "mapping_write_failed": "写入 mapping.yaml 失败：{error}",
+      "reload_failed": "配置已写入，但子设备重载失败（网关未连接时可稍后点击“重载子设备配置”按钮）：{error}"
+    }
+  },
   "device": {
     "gateway": {
       "name": "智控网关"

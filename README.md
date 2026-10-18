@@ -2,6 +2,10 @@
 > 本项目是非官方 Home Assistant 自定义集成，未获得华为或 OneConnect 项目方的官方授权、认可或支持。
 > 项目用于技术研究和 Home Assistant 实验环境，请遵守相关平台服务条款及适用法律。
 
+> [!NOTE]
+> 本仓库是 [xiasi0/ha-oneconnect-bridge](https://github.com/xiasi0/ha-oneconnect-bridge) 的增强 fork（Apache 2.0），
+> 在原版基础上新增了「添加实体」配置界面：勾选 HA 实体即可自动生成子设备映射并注册到华为智慧生活，无需手写 YAML。
+
 ---
 
 <p align="center">
@@ -81,7 +85,22 @@ config/custom_components/oneconnect_bridge/
 
 重载成功后，集成会通过父网关会话注册或更新 YAML 中声明的子设备，并开始状态同步和上下行控制。样例中的产品和实体值仅供参考，需要按实际环境替换。
 
-### 5. 重新配对与删除
+### 5. 添加实体（HomeKit Bridge 式勾选）
+
+无需手写 YAML，即可把任意 HA 实体注册为华为子设备：
+
+```text
+设置 → 设备与服务 → OneConnect Bridge → 配置 → 添加实体
+```
+
+- 勾选 `switch` / `light` / `input_boolean` / `script` / `scene` / `lock` / `button` 实体后保存，集成自动生成对应网关 `mapping.yaml` 的 children 条目并触发子设备重载；
+- 取消勾选即从智慧生活删除对应子设备；
+- 实体名称自动作为云端设备显示名称；
+- 灯光按能力自动选择产品型号：全彩 → RGBCW 驱动（ZG0O），色温 → 调光调色灯（ZG13），亮度 → 调光灯（ZG14），仅开关 → 智能照明（ZG0S）；
+- `lock` 以智能开关形式包装（开=已上锁，关=已解锁），`script` / `scene` / `button` 以开关形式包装（显示常关，点击触发一次执行/按压）；
+- 自动生成的条目带 `managed_by: entity_bridge` 标记，与手写 children 共存，互不覆盖。
+
+### 6. 重新配对与删除
 
 仅重新启动局域网配对监听，可调用：
 

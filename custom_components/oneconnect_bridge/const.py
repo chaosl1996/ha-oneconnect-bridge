@@ -22,6 +22,17 @@ DISCOVERY_PORT = 5683
 DISCOVERY_MULTICAST = "238.238.238.238"
 PIN_TTL_SECONDS = 300
 
+# HA entity domains selectable in the "add entities" options flow.
+BRIDGEABLE_DOMAINS = (
+    "switch",
+    "light",
+    "input_boolean",
+    "script",
+    "scene",
+    "lock",
+    "button",
+)
+
 # Keep local/cloud abuse-prevention limits fixed.
 MAX_GATEWAY_INSTANCES = 3
 MAX_CHILD_DEVICES_PER_GATEWAY = 64

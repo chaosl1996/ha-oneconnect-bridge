@@ -184,6 +184,27 @@ async def _call_binding(
         return
     if binding.field_name == "on":
         is_on = value not in (None, False, 0, "0", "off", "false")
+        if domain == "lock":
+            service = "lock" if is_on else "unlock"
+            _LOGGER.debug(
+                "Calling lock.%s entity=%s value=%s",
+                service,
+                binding.entity_id,
+                value,
+            )
+            await hass.services.async_call(
+                "lock", service, {"entity_id": binding.entity_id}, blocking=True
+            )
+            return
+        if domain == "button":
+            if is_on:
+                _LOGGER.debug(
+                    "Calling button.press entity=%s", binding.entity_id
+                )
+                await hass.services.async_call(
+                    "button", "press", {"entity_id": binding.entity_id}, blocking=True
+                )
+            return
         service = "turn_on" if is_on else "turn_off"
         _LOGGER.debug(
             "Calling HA service %s.%s entity=%s value=%s",
